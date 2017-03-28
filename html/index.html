@@ -1,0 +1,429 @@
+<html>
+<head>
+    <script type="text/javascript" src="/js/jquery.min.js"></script>
+    <script type="text/javascript" src="/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="/js/handlebars.js"></script>
+    <!-- script type="text/javascript" src="/js/pnotify.custom.min.js"></script //-->
+
+    <style type="text/css">
+        .hasError {
+            border-top-color: 'red';
+        }
+    </style>
+    <link rel="stylesheet" type="text/css" href="/css/bootstrap.min.css">
+    <!-- link rel="stylesheet" type="text/css" href="/css/pnotify.custom.min.css" //-->
+
+
+<script type="text/javascript">
+    var _dark = function () { $('#div_shadow').show(); };
+    var _light = function () { $('#div_shadow').hide(); };
+    var dts = function () {now=new Date(); return parseInt(now.getTime().toString()); };
+
+    // function mes_e (text){$.pnotify({title: 'Ошибка ', text: text, hide: false, type: 'error', history: false, styling: 'bootstrap3'}); }
+
+    // function mes_m (text){
+    //     // $.pnotify({title: 'Вам сообщение', text: text, hide: true, delay: 5000, type: 'success', history: false, styling: 'bootstrap3'}); 
+    //     new PNotify({
+    //                 title: 'Regular Notice',
+    //                 text: 'Check me out! I\'m a notice.'
+    //     });
+    // }
+
+    // function mes_d (text){if (_d){$.pnotify({title: 'отладка', text: text, hide: false, history: false, styling: 'bootstrap3'}); } }
+
+    var form_rel = {
+        registration: {
+            tmpl:'registration_tmpl',
+            current: false
+        },
+        enter: {
+            tmpl:'enter_tmpl',
+            current: true
+        },
+        remember: {
+            tmpl:'remember_tmpl',
+            current: false
+        },
+    };
+
+    var send_remember = function () {
+        var eml = $('#UserEmail').val().replace(/[\s]/,"");
+        if ( !eml ) {
+            alert('вы не указали адрес\n!'+eml+'!\n');
+        } else {
+            _dark();
+            $.ajax({
+                url: '/api/remember',
+                data: JSON.stringify({dts:dts(),'eml':eml}),
+                dataType: 'json',
+                contentType: 'application/json; charset=utf-8',
+                type: 'GET',
+            }).done(function(data){
+                alert('Данные высланы на ваш адрес');
+                // document.cookie="auth=email:"+data.email+",dig:"+data.dig+";";
+                // main_func();
+            })
+            .error(function(jqXHR, textStatus, errorThrown){            
+                alert('Вы ввели неверные email или пароль');
+            })
+            .always(function(){
+                _light();
+            });//.ajax
+        }
+    };
+
+    var logout = function () {
+        document.cookie = "auth=;";
+        toggle_form();
+    };
+
+    var main_func = function () {
+
+        var recovery_key = location.search.replace(/^\?(.+)\#*$/,"$1") ;
+
+        if ( recovery_key ) {
+            $('#main').html((Handlebars.compile($('#recovery_tmpl').html())({recovery_key:recovery_key})));
+        } else {
+            if ( check_cookie() ) {
+                $('#main').html((Handlebars.compile($('#main_tmpl').html())()));
+                $('#nav_menu').html((Handlebars.compile($('#nav2_tmpl').html())()));
+            } else {
+                toggle_form();
+            }
+        }
+    };
+
+    // вход 
+    var try_login = function () {
+        var par = {
+            dts: dts(),
+        };
+        $.each($('.login_user_form'),function(i,o) {
+            par[$(o).prop('id')] = $(o).val();
+        });
+
+
+        _dark();
+        $.ajax({
+            url: '/api/user',
+            data: JSON.stringify(par),
+            dataType: 'json',
+            contentType: 'application/json; charset=utf-8',
+            type: 'GET',
+        }).done(function(data){
+            document.cookie="auth=email:"+data.email+",dig:"+data.dig+";";
+            main_func();
+        })
+        .error(function(jqXHR, textStatus, errorThrown){            
+            alert('Вы ввели неверные email или пароль');
+        })
+        .always(function(){
+            _light();
+        });//.ajax
+
+    };
+
+    var recovery_user = function () {
+        if ( _check_pass() ) {alert('Пароли не совпадают'); return false; }
+
+
+        _dark();
+
+        var par = {
+            dts : dts(),
+            UserPassword: $('#UserPassword').val(),
+            UserKey : $('#UserKey').val(),
+        };
+
+        $.ajax({
+            url: '/api/user',
+            data: JSON.stringify(par),
+            dataType: 'json',
+            contentType: 'application/json; charset=utf-8',
+            type: 'UPDATE',
+        }).done(function(data){
+            window.location='/';
+        })
+        .error(function(jqXHR, textStatus, errorThrown){            
+            alert('Вы воспользовались неправильной ссылкой');
+        })
+        .always(function(){
+            _light();
+        });//.ajax
+
+    };
+
+
+    // регистарция пользователя
+    var reg_user = function () {
+        if ( _check_req_fields() ) {alert('Не все поля заполнены'); return false; }
+        if ( _check_pass() ) {alert('Пароли не совпадают'); return false; }
+
+        var par = {
+            dts: dts(),
+        };
+
+        $.each($('.new_user_form'),function(i,o) {
+            par[$(o).prop('id')] = $(o).val();
+        });
+        _dark();
+        $.ajax({
+            url: '/api/user',
+            data: JSON.stringify(par),
+            dataType: 'json',
+            contentType: 'application/json; charset=utf-8',
+            type: 'POST',
+        }).done(function(data){
+            document.cookie="auth=email:"+data.email+",dig:"+data.dig+";";
+            $.each($('#reg_form >> input,select'),function(i,o) {
+                $(o).val('');
+            });
+        })
+        .error(function(jqXHR, textStatus, errorThrown){            
+            alert('Пользователь с таких email адресом в базе уже существует. Попробуйте воспользоваться воостановлением пароля.');
+        })
+        .always(function(){
+            _light();
+        });//.ajax
+
+    };
+
+    var check_cookie = function () {
+        var auth = document.cookie.replace(/(?:(?:^|.*;\s*)auth\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+        var par = {};
+        $.each(auth.split(",",2),function(i,s) {
+            var _c = s.split(":",2);
+            if ( _c[0] ) {
+                par[_c[0]] = _c[1];
+            }
+        });
+
+        if ( par.dig ) {
+            _dark();
+            $.ajaxSetup({async: false});
+            var ret = false;
+            $.ajax({
+                url: '/api/user',
+                data: JSON.stringify(par),
+                dataType: 'json',
+                contentType: 'application/json; charset=utf-8',
+                type: 'PUT',
+            })
+            .done(function() {
+                _light();
+                ret = true;
+            })
+            .error(function(jqXHR, textStatus, errorThrown){            
+                alert('Кука поддельная');
+                _light();
+                ret = false;
+            });
+            $.ajaxSetup({async: true});
+            return ret;
+        } else {
+            return false;
+        }
+    }
+
+
+    var _check_pass = function () {
+        var error = false;
+        if (
+            $('#UserPassword').val().replace(/\s/g,"").length == 0 ||
+            $('#UserPassword2').val().replace(/\s/g,"").length == 0 ||
+            $('#UserPassword').val() != $('#UserPassword2').val() 
+        ) {
+            error = true;
+        }
+        // TK - проверка качества
+        return error;
+    };
+
+    var _check_req_fields = function () {
+        var req_fields = ['UserPassword','UserEmail'];
+
+        var error = false;
+        $.each(req_fields,function (i,field) {
+            if ( !$('#'+field).val() ) {
+                error = true;
+                return false;
+            }
+        });
+        return error;
+    };
+
+    var toggle_form = function (obj) {
+        var form = '';
+        $('#nav_menu').html((Handlebars.compile($('#nav1_tmpl').html())()));
+
+        var __check_current_form = function (form) {
+            // функция проверки желаемого и действительного
+            var ret = true;
+            $.each(form_rel,function(i,o) {
+                if ( i == form ) {
+                    if ( o.current ) {
+                        ret = false;
+                    }
+                }
+            });
+            return ret;
+        };
+
+        if ( !obj ) {
+            // случай первого входа
+            $.each(form_rel,function(i,o) {
+                if ( o.current ) {
+                    form = i;
+                    return false;
+                }
+            });
+        } else {
+            obj = $(obj);
+            form = obj.data('form');
+        }
+
+
+        if ( __check_current_form(form) || !obj ) {
+            $('#main').html((Handlebars.compile($('#'+form_rel[form]['tmpl']).html())()));
+            $.each(form_rel,function(i,o) {
+                o.current = false;
+            });
+            form_rel[form]['current'] = true;
+        }
+    };
+
+
+
+    $(document).ready(function() {
+        
+        main_func();
+        
+    });
+</script>
+</head>
+<body>
+<div id="div_shadow" class="shadow" style="left: 0px; top: 0px; width: 100%; height: 100%; position: fixed; background-color: rgb(0, 0, 0); z-index: 10; opacity: 0.7; display: none; ">
+    <img src="/img/ajax-loader.gif" style="position: absolute; left: 50%; top: 50%;">
+</div>
+<nav class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        </button>
+        <a id="navbar_title" class="navbar-brand" href="">Билетики</a>
+    </div>
+
+    <ul class="nav navbar-nav navbar-right" id="nav_menu">
+<!--         <li id="enter" class="">
+            <a href="#" data-form="enter" onclick="toggle_form(this)">Вход</a>
+        </li>
+        <li id="registration" class="">
+            <a href="#" data-form="registration" onclick="toggle_form(this)">Регистрация</a>
+        </li>
+        <li>&nbsp;</li>
+ -->    </ul>
+</nav>
+<br><br>
+<!-- div class="content col-md-12" id="title">
+    <h1>Билетики</h1>
+</div //-->
+
+<div class="content col-md-12" id="main">
+    
+</div>
+
+<script id="nav1_tmpl" type="text/x-handlebars-template">
+    <li id="enter" class="">
+        <a href="#" data-form="enter" onclick="toggle_form(this)">Вход</a>
+    </li>
+    <li id="registration" class="">
+        <a href="#" data-form="registration" onclick="toggle_form(this)">Регистрация</a>
+    </li>
+    <li>&nbsp;</li>    
+</script>
+
+<script id="nav2_tmpl" type="text/x-handlebars-template">
+    <li id="logout" class="">
+        <a href="#" data-form="logout" onclick="logout();">Выход</a>
+    </li>
+    <li>&nbsp;</li>    
+</script>
+
+
+<script id="main_tmpl" type="text/x-handlebars-template">
+    <h1>Тут будет главная форма</h1>
+</script>
+
+<script id="registration_tmpl" type="text/x-handlebars-template">
+    <h1>Регистрация</h1>
+    <form role="form" id="reg_form">
+      <input class="new_user_form" type="hidden" id="type" value="registration">
+      <div class="form-group">
+        <label for="UserEmail">Email address</label>
+        <input type="email" class="form-control new_user_form" id="UserEmail" placeholder="E-mail">
+      </div>
+      <div class="form-group">
+        <label for="UserPassword">Пароль</label>
+        <input type="password" class="form-control new_user_form" id="UserPassword" placeholder="Пароль">
+      </div>
+      <div class="form-group">
+        <label for="UserPassword2">Пароль для проверки</label>
+        <input type="password" class="form-control" id="UserPassword2" placeholder="Пароль для проверки">
+      </div>
+      <button type="submit" id="new_user" class="btn btn-primary" onclick="reg_user();return false;">Сохранить</button>
+    </form>
+</script>
+
+<script id="enter_tmpl" type="text/x-handlebars-template">
+    <h1>Вход</h1>
+    <form role="form" id="enter_form">
+      <input class="login_user_form" type="hidden" id="type" value="enter">
+      <div class="form-group">
+        <label for="UserEmail">Email address</label>
+        <input type="email" class="form-control login_user_form" id="UserEmail" placeholder="E-mail">
+      </div>
+      <div class="form-group">
+        <label for="UserPassword">Пароль</label>
+        <input type="password" class="form-control login_user_form" id="UserPassword" placeholder="Пароль">
+      </div>
+      <button type="submit" id="login_user" class="btn btn-primary" onclick="try_login();return false;">Войти</button> 
+      <a href="#" data-form="registration" class="btn btn-primary" onclick="toggle_form(this)">Регистрация</a> 
+      <a href="#" data-form="remember" class="btn btn-primary" onclick="toggle_form(this)">Забыли пароль</a> 
+    </form>
+</script>
+
+<script id="remember_tmpl" type="text/x-handlebars-template">
+    <h1>Вход</h1>
+    <form role="form" id="enter_form">
+      <input class="login_user_form" type="hidden" id="type" value="enter">
+      <div class="form-group">
+        <label for="UserEmail">Email address</label>
+        <input type="email" class="form-control login_user_form" id="UserEmail" placeholder="E-mail">
+      </div>
+      <button class="btn btn-primary" onclick="send_remember();return false;">Выслать на указанный адрес</button> 
+    </form>
+</script>
+
+<script id="recovery_tmpl" type="text/x-handlebars-template">
+    <h1>Воссановление пароля</h1>
+    <form role="form" id="reg_form">
+      <input class="new_user_form" type="hidden" id="type" value="recovery">
+      <input class="new_user_form" type="hidden" id="UserKey" value="{{recovery_key}}">
+      <div class="form-group">
+        <label for="UserPassword">Пароль</label>
+        <input type="password" class="form-control new_user_form" id="UserPassword" placeholder="Пароль">
+      </div>
+      <div class="form-group">
+        <label for="UserPassword2">Пароль для проверки</label>
+        <input type="password" class="form-control" id="UserPassword2" placeholder="Пароль для проверки">
+      </div>
+      <button type="submit" id="new_user" class="btn btn-primary" onclick="recovery_user();return false;">Изменить пароль</button>
+    </form>
+</script>
+
+
+</body>
+</html>
